@@ -45,10 +45,6 @@ Working on:
 #include "tokenize.h"
 #include "parseTree.h"
 
-std::ostream& operator<<(std::ostream& out, TokenType t){ return out << TokenTypeStrings[(int)t]; }
-std::ostream& operator<<(std::ostream& out, NodeType t){ return out << NodeTypeStrings[(int)t]; }
-std::ostream& operator<<(std::ostream& out, NodeSubType t){ return out << NodeSubTypeStrings[(int)t]; };
-
 int main(int argc, const char * argv[]) {
     if(argc < 3){
         std::cerr << "Incorrect usage. Correct usage is...\n";
@@ -73,25 +69,42 @@ int main(int argc, const char * argv[]) {
     std::cout << source_str;
     std::cout << "\n-----------------------------\n";
     
-    std::vector<Token> tokens = tokenize(source_str);
+    std::vector<Token> tokens;
+    {
+        tokenRet tokenizeResult = tokenize(source_str);
+        if(!tokenizeResult.success){
+            std::cout << "Error: " << tokenizeResult.et << ", " << tokenizeResult.err_s << " on line " << tokenizeResult.errLine << "\n";
+            return EXIT_FAILURE;
+        }
+        tokens = std::move(tokenizeResult.tokens);
+    }
 
     std::cout << "tokens:\n-----------------------------\n";
     printTokens(tokens);
     std::cout << "\n-----------------------------\n";
 
 
-
-    parseTreeReturn parseTree = createParseTree(tokens); 
-    std::cout << "parse tree:\n-----------------------------\n";
-    std::cout << "(" << parseTree.traces.size() << ")\n";
-    if(parseTree.success == false){
-        std::cout << "Errors in creating parse tree\n";
-        return EXIT_FAILURE;
-    } else {
-        for(int i = 0; i < parseTree.traces.size(); i++){
-            parseTree.traces.at(i).node->print(0);
-            std::cout << "\n";
+    std::vector<std::shared_ptr<Node>> trees;
+    {
+        parseTreeReturn parseTree = createParseTree(tokens); 
+        if(parseTree.success == false){
+            std::cout << "Errors in creating parse tree\n";
+            return EXIT_FAILURE;
+        } else {
+            for(int i = 0; i < parseTree.traces.size(); i++){
+                parseTree.traces.at(i).node->print(0);
+                std::cout << "\n";
+            }
         }
+        for(int i = 0; i < parseTree.traces.size(); i++){
+            trees.push_back(std::move(parseTree.traces.at(i).node));
+        }
+    }
+
+    std::cout << "parse tree:\n-----------------------------\n";
+    for(int i = 0; i < trees.size(); i++){
+        trees.at(i)->print(0);
+        std::cout << "\n";
     }
     std::cout << "\n-----------------------------\n";
 

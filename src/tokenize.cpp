@@ -3,7 +3,8 @@
 
 #include <vector>
 #include <iostream>
-#include "token.h"
+
+#include "tokenize.h"
 
 void cleanTokens(std::vector<Token> &tokens){
     int lineNo = 1;
@@ -17,61 +18,98 @@ void cleanTokens(std::vector<Token> &tokens){
     std::erase_if(tokens, [](Token &t){return t.type==TokenType::NEWLINE;});
 }
 
-std::vector<Token> tokenize(const std::string& str){
-    std::vector<Token> tokens;
+tokenRet tokenize(const std::string& str){
+    tokenRet ret; 
     std::string charBuffer = "";
     std::string binaryOperatorChars = "+-*/%=<>";
     std::string repeatedOperators = "+-<>";
+    int lineNumber = 1;
     
     for(int i = 0; i < str.size(); i++){
         charBuffer = "";
         char c = str.at(i);
-        if(c == ';'){ tokens.push_back(Token(TokenType::SEMI)); }
-        else if(c == '\n'){ tokens.push_back(Token(TokenType::NEWLINE)); }
-        else if(c == ' ' || c == '\t'){ /*skip whitespace characters*/ }
+
+        //multiline comments
+        if(c == '/' && i+2 < str.size() && str.at(i+1) == '/' && str.at(i+2) == '/'){
+            int startLine = lineNumber;
+            i+=2;
+            for(; i+2 < str.size() && (str.at(i) != '/' || str.at(i+1) != '/' || str.at(i+2) != '/'); i++){
+                if(str.at(i) == '\n'){ ret.tokens.push_back(Token(TokenType::NEWLINE)); lineNumber++; }
+            }; //skip to end of multiline
+            if(i == str.size() - 2){
+                return tokenRet(ErrorType::SYNTAX_ERROR, "expected end of multiline comment", startLine);
+            }
+            i+=2;
+            continue;
+        }
+
+        //single line comments
+        if(c == '/' && i+1 < str.size() && str.at(i+1) == '/'){
+            for(; i < str.size() && str.at(i) != '\n'; i++); //skip to end of line
+            i--;
+            continue;
+        }
+
+        if(c == ';'){ ret.tokens.push_back(Token(TokenType::SEMI)); continue; }
+        if(c == '\n'){ ret.tokens.push_back(Token(TokenType::NEWLINE)); lineNumber++; continue; }
+        if(c == ' ' || c == '\t'){ /*skip whitespace characters*/ continue; }
         //handle ()[]{}
-        else if(c == '('){ tokens.push_back(Token(TokenType::OPEN_PARENTH)); }
-        else if(c == ')'){ tokens.push_back(Token(TokenType::CLOSE_PARENTH)); }
-        else if(c == '['){ tokens.push_back(Token(TokenType::OPEN_BRACKET)); }
-        else if(c == ']'){ tokens.push_back(Token(TokenType::CLOSE_BRACKET)); }
-        else if(c == '{'){ tokens.push_back(Token(TokenType::OPEN_CURLY)); }
-        else if(c == '}'){ tokens.push_back(Token(TokenType::CLOSE_CURLY)); }
+        if(c == '('){ ret.tokens.push_back(Token(TokenType::OPEN_PARENTH)); continue; }
+        if(c == ')'){ ret.tokens.push_back(Token(TokenType::CLOSE_PARENTH)); continue; }
+        if(c == '['){ ret.tokens.push_back(Token(TokenType::OPEN_BRACKET)); continue; }
+        if(c == ']'){ ret.tokens.push_back(Token(TokenType::CLOSE_BRACKET)); continue; }
+        if(c == '{'){ ret.tokens.push_back(Token(TokenType::OPEN_CURLY)); continue; }
+        if(c == '}'){ ret.tokens.push_back(Token(TokenType::CLOSE_CURLY)); continue; }
         //handle +-*/%=<>
-        else if(binaryOperatorChars.find(c) != std::string::npos){
+        if(binaryOperatorChars.find(c) != std::string::npos){
             //handle += type shit
             if(i + 1 < str.size() && str.at(i+1) == '='){
-                tokens.push_back(Token(TokenType::BINARY_OPERATOR, charBuffer + c + "="));
+                ret.tokens.push_back(Token(TokenType::BINARY_OPERATOR, charBuffer + c + "="));
                 i++;
-            } else {
-                //handle ++, --, <<, >>
-                if(i + 1 < str.size() && repeatedOperators.find(c) != std::string::npos && str.at(i+1) == c){ 
-                    tokens.push_back(Token((c == '+' || c == '-') ? TokenType::UNARY_OPERATOR : TokenType::BINARY_OPERATOR, charBuffer + c + c));
-                    i++;
-                //must be +-*/%=<>
-                } else {
-                    tokens.push_back(Token(TokenType::BINARY_OPERATOR, std::string(1, c)));
-                }
+                continue; 
             }
+            //handle ++, --, <<, >>
+            if(i + 1 < str.size() && repeatedOperators.find(c) != std::string::npos && str.at(i+1) == c){ 
+                ret.tokens.push_back(Token((c == '+' || c == '-') ? TokenType::UNARY_OPERATOR : TokenType::BINARY_OPERATOR, charBuffer + c + c));
+                i++;
+                continue;
+            //must be +-*/%=<>
+            }
+            ret.tokens.push_back(Token(TokenType::BINARY_OPERATOR, std::string(1, c)));
+            continue;
         }
         //handle !, !=, &, &&, |, ||
-        else if(c == '!' || c == '&' || c == '|'){
+        if(c == '!' || c == '&' || c == '|'){
             //check for !=, &&, ||
             if(i + 1 < str.size()){
                 if(c == '!'){
-                    if(str.at(i+1) == '='){ tokens.push_back(Token(TokenType::BINARY_OPERATOR, "!=")); i++;}
-                    else { tokens.push_back(Token(TokenType::UNARY_OPERATOR, "!")); } 
-                } else {
-                    if(str.at(i+1) == c){ tokens.push_back(Token(TokenType::BINARY_OPERATOR, c=='&' ? "&&" : "||")); i++;}
-                    else { tokens.push_back(Token(TokenType::BINARY_OPERATOR, std::string(1, c))); }
+                    if(str.at(i+1) == '='){ 
+                        ret.tokens.push_back(Token(TokenType::BINARY_OPERATOR, "!=")); 
+                        i++; 
+                        continue; 
+                    }
+                    ret.tokens.push_back(Token(TokenType::UNARY_OPERATOR, "!")); 
+                    continue;
                 }
-            //must be !, &, |
-            } else {
-                if(c == '!'){ tokens.push_back(Token(TokenType::UNARY_OPERATOR, "!")); }
-                else { tokens.push_back(Token(TokenType::BINARY_OPERATOR, std::string(1, c))); }
+                if(str.at(i+1) == c){ 
+                    ret.tokens.push_back(Token(TokenType::BINARY_OPERATOR, c=='&' ? "&&" : "||")); 
+                    i++; 
+                    continue; 
+                }
+                ret.tokens.push_back(Token(TokenType::BINARY_OPERATOR, std::string(1, c))); 
+                continue;
             }
+            //must be !, &, |
+            if(c == '!'){ 
+                ret.tokens.push_back(Token(TokenType::UNARY_OPERATOR, "!")); 
+                continue; 
+            }
+            //must be &, |
+            ret.tokens.push_back(Token(TokenType::BINARY_OPERATOR, std::string(1, c))); 
+            continue;
         }
         //start of identifier
-        else if(std::isalpha(c) || c == '_'){ 
+        if(std::isalpha(c) || c == '_'){ 
             while(std::isalnum(str.at(i)) || str.at(i) == '_'){
                 charBuffer += str.at(i);
                 i++;
@@ -83,14 +121,16 @@ std::vector<Token> tokenize(const std::string& str){
             
             //handle different identifiers
             if(charBuffer == "return"){
-                tokens.push_back(Token(TokenType::RESERVED));
-                tokens.back().s_value = "return";
-            } else { //generic identifier (variable/function names etc.)
-                tokens.push_back(Token(TokenType::IDENTIFIER, charBuffer));
+                ret.tokens.push_back(Token(TokenType::RESERVED));
+                ret.tokens.back().s_value = "return";
+                continue; 
             }
+            //generic identifier (variable/function names etc.)
+            ret.tokens.push_back(Token(TokenType::IDENTIFIER, charBuffer));
+            continue;
         }
         //number literal
-        else if(std::isdigit(c) || c == '.'){ 
+        if(std::isdigit(c) || c == '.'){ 
             while((str.at(i) >= 48 && str.at(i) <= 57) || str.at(i) == '.'){
                 charBuffer += str.at(i);
                 i++;
@@ -101,15 +141,24 @@ std::vector<Token> tokenize(const std::string& str){
             i--;
             
             if(charBuffer.find('.') == std::string::npos){ // integer
-                tokens.push_back(Token(TokenType::INT_LITERAL, std::stoi(charBuffer)));
-            } else {
-                //floating point goes here
+                ret.tokens.push_back(Token(TokenType::INT_LITERAL, std::stoi(charBuffer)));
+                continue;
+            }
+            //floating point goes here
+        }
+        //string literal
+        if(c == '"'){
+            for(; str.at(i) != '"'; i++){
+                if(i + 1 >= str.size()){
+
+                    break;
+                }
             }
         }
     }
     
-    cleanTokens(tokens);
-    return tokens;
+    cleanTokens(ret.tokens);
+    return ret;
 }
 
 void printTokens(std::vector<Token>& tokens){

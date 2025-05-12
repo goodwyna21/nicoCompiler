@@ -16,24 +16,6 @@ struct Node{
     void print(int depth=0);
 };
 
-enum class ErrorType{
-    MAX_DEPTH,
-    INVALID_ARGUMENT,
-    EXPECTED_STATEMENT,
-    UNEXPECTED_EOF,
-    SYNTAX_ERROR,
-    NONE,
-};
-
-const std::string ErrorTypeStrings[] = {
-    "MAX_DEPTH",
-    "INVALID_ARGUMENT",
-    "EXPECTED_STATEMENT",
-    "UNEXPECTED_EOF",
-    "SYNTAX_ERROR",
-    "NONE",
-};
-
 struct StackTrace{
     std::shared_ptr<Node> node;
     bool success = false;
