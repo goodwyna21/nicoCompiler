@@ -2828,7 +2828,8 @@ CMakeFiles/nico.dir/src/tokenize.cpp.o: /Users/archerg/Desktop/projects/nicotine
   /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/17/include/stdarg.h \
   /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/17/include/stddef.h \
   /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/17/include/stdint.h \
-  /Users/archerg/Desktop/projects/nicotine/include/token.h
+  /Users/archerg/Desktop/projects/nicotine/include/token.h \
+  /Users/archerg/Desktop/projects/nicotine/include/tokenize.h
 
 
 /Users/archerg/Desktop/projects/nicotine/src/tokenize.cpp:
