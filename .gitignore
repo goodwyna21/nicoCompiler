@@ -1,0 +1,6 @@
+build/nico
+asm/**
+.vscode/**
+.vscode/
+old_src/**
+old_src/

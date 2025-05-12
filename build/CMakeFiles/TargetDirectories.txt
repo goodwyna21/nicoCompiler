@@ -1,0 +1,3 @@
+/Users/archerg/Desktop/projects/nicotine/build/CMakeFiles/nico.dir
+/Users/archerg/Desktop/projects/nicotine/build/CMakeFiles/edit_cache.dir
+/Users/archerg/Desktop/projects/nicotine/build/CMakeFiles/rebuild_cache.dir
