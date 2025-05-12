@@ -1,6 +1,9 @@
 #ifndef TOKEN_H
 #define TOKEN_H
 
+#include <string>
+#include <iostream>
+
 enum class TokenType{
     INT_LITERAL,
     STR_LITERAL,

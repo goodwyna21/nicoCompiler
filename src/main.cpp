@@ -83,12 +83,13 @@ int main(int argc, const char * argv[]) {
 
     parseTreeReturn parseTree = createParseTree(tokens); 
     std::cout << "parse tree:\n-----------------------------\n";
+    std::cout << "(" << parseTree.traces.size() << ")\n";
     if(parseTree.success == false){
-        std::cout << "Failed to build parse tree\n";
+        std::cout << "Errors in creating parse tree\n";
         return EXIT_FAILURE;
     } else {
-        for(int i = 0; i < parseTree.trees.size(); i++){
-            parseTree.trees.at(i)->print(0);
+        for(int i = 0; i < parseTree.traces.size(); i++){
+            parseTree.traces.at(i).node->print(0);
             std::cout << "\n";
         }
     }
