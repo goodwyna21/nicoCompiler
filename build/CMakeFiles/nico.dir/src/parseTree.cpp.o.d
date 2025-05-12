@@ -932,5 +932,5 @@ CMakeFiles/nico.dir/src/parseTree.cpp.o: \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.4.sdk/usr/include/c++/v1/stack \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.4.sdk/usr/include/c++/v1/print \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.4.sdk/usr/include/unistd.h \
-  /Users/archerg/Desktop/projects/nicotine/include/token.h \
-  /Users/archerg/Desktop/projects/nicotine/include/parseTree.h
+  /Users/archerg/Desktop/projects/nicotine/include/parseTree.h \
+  /Users/archerg/Desktop/projects/nicotine/include/token.h

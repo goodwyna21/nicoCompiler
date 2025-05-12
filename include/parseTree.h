@@ -21,10 +21,13 @@ struct StackTrace{
     bool success = false;
     ErrorType errType = ErrorType::NONE;
     std::string err_s = "";
+    bool strongError = false;
     std::vector<std::shared_ptr<StackTrace>> children = {};
     StackTrace();
     StackTrace(std::shared_ptr<Node>);
-    StackTrace(ErrorType, std::string);
+    StackTrace(ErrorType, std::string, const std::vector<std::reference_wrapper<StackTrace>>&, bool _strongError=false);
+
+    void printTrace(int depth=0);
 };
 
 struct parseTreeReturn{

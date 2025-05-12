@@ -5,11 +5,9 @@
 #include <iostream>
 #include <memory>
 
-#include "token.h"
-//#include "syntaxDefinitions.h"
 #include "parseTree.h"
 
-#define MAX_PARSE_DEPTH 10
+#define MAX_PARSE_DEPTH 15
 #define PARSE_TREE_DEBUG_PRINT
 
 
@@ -44,16 +42,30 @@ StackTrace::StackTrace() {
     success = false;
 }
 
-StackTrace::StackTrace(ErrorType et, std::string em){
+StackTrace::StackTrace(std::shared_ptr<Node> _node){
+    node = _node;
+    success = true;
+}
+StackTrace::StackTrace(ErrorType et, std::string em, const std::vector<std::reference_wrapper<StackTrace>>& st_vec, bool _strongError){
     node = nullptr;
     success = false;
     errType = et;
     err_s = em;
+
+    for(int i = 0; i < st_vec.size(); i++){
+        children.push_back(std::make_shared<StackTrace>(st_vec.at(i)));
+    }
+    strongError = _strongError;
 }
 
-StackTrace::StackTrace(std::shared_ptr<Node> _node){
-    node = _node;
-    success = true;
+void StackTrace::printTrace(int depth){
+    for(int i = 0; i < depth; i++){
+        std::cout << " -";
+    }
+    std::cout << errType << ": " << err_s << ", " << children.size() << " children\n";
+    for(auto it = children.begin(); it != children.end(); ++it){
+        (*it)->printTrace(depth+1);
+    }
 }
 
 StackTrace parseParentheses(std::vector<Token>::iterator*, std::vector<Token>::iterator, int);
@@ -67,7 +79,7 @@ StackTrace parseStatement(std::vector<Token>::iterator* it, std::vector<Token>::
     for(int i = 0; i < depth; i++){ std::cout << ".  "; }
     std::cout << "statement | [" << (*it)->type << "] - [" << end->type << "] |\n";
 #endif
-    if(depth > MAX_PARSE_DEPTH || (*it) == end){ return StackTrace(ErrorType::MAX_DEPTH, ""); }
+    if(depth > MAX_PARSE_DEPTH || (*it) == end){ return StackTrace(ErrorType::MAX_DEPTH, "", {}); }
     std::vector<Token>::iterator prevPosition = (*it);
 
     if((*it)->type == TokenType::RESERVED && (*it)->s_value == "return"){
@@ -79,10 +91,18 @@ StackTrace parseStatement(std::vector<Token>::iterator* it, std::vector<Token>::
         if(retStateSearch.success){
             returnStatement.node->children.push_back(std::move(retStateSearch.node));
         } else { 
+            if(retStateSearch.strongError){
+                (*it) = prevPosition;
+                return retStateSearch;
+            }
             (*it) = prevPosition + 1;
             StackTrace retOpSearch = parseOperand(it, end, depth+1);
             if(retOpSearch.success){
                 returnStatement.node->children.push_back(std::move(retOpSearch.node));
+            }
+            if(retOpSearch.strongError){
+                (*it) = prevPosition;
+                return retOpSearch;
             }
         }
 #ifdef PARSE_TREE_DEBUG_PRINT
@@ -103,7 +123,9 @@ StackTrace parseStatement(std::vector<Token>::iterator* it, std::vector<Token>::
 #endif
             return parenthSearch;
         }
-        return StackTrace(ErrorType::INVALID_ARGUMENT, "bad inside of parentheses");
+        StackTrace ret(ErrorType::INVALID_ARGUMENT, "bad inside of parentheses", {parenthSearch}, true);
+        (*it) = prevPosition;
+        return ret;
     }
     (*it) = prevPosition; 
 
@@ -127,10 +149,16 @@ StackTrace parseStatement(std::vector<Token>::iterator* it, std::vector<Token>::
             return StackTrace(ret);
         }
         (*it) = prevPosition; 
+        if(operandSearch.strongError){
+            return operandSearch;
+        }
     }
 
     //binary or postfix operator
     StackTrace operandSearch = parseOperand(it, end, depth+1);
+    if(operandSearch.strongError){
+        return operandSearch;
+    }
     if(operandSearch.success){
         std::vector<Token>::iterator op1endPosition = (*it);
 
@@ -138,6 +166,9 @@ StackTrace parseStatement(std::vector<Token>::iterator* it, std::vector<Token>::
         if((*it)->type == TokenType::BINARY_OPERATOR){
             ++(*it);
             StackTrace op2Search = parseOperand(it, end, depth+1);
+            if(op2Search.strongError){
+                return StackTrace(ErrorType::NONE, "", {std::ref(op2Search)}, true);
+            }
             if(op2Search.success){
                 std::shared_ptr<Node> ret = std::make_shared<Node>(NodeType::statement);
                 ret->subtype = NodeSubType::binary_op;
@@ -153,7 +184,7 @@ StackTrace parseStatement(std::vector<Token>::iterator* it, std::vector<Token>::
                 return StackTrace(ret);
             }
 
-            return StackTrace(ErrorType::INVALID_ARGUMENT, "bad 2nd operand of binary operator");
+            return StackTrace(ErrorType::INVALID_ARGUMENT, "bad 2nd operand of binary operator", {std::ref(op2Search)});
         }
         (*it) = op1endPosition;
         //postfix unary
@@ -173,7 +204,8 @@ StackTrace parseStatement(std::vector<Token>::iterator* it, std::vector<Token>::
         }
     }
 
-    return StackTrace(ErrorType::EXPECTED_STATEMENT, "bad statement");
+    StackTrace ret(ErrorType::EXPECTED_STATEMENT, "bad statement", {std::ref(operandSearch)});
+    return ret;
 }
 
 StackTrace parseParentheses(std::vector<Token>::iterator* it, std::vector<Token>::iterator end, int depth){
@@ -181,12 +213,12 @@ StackTrace parseParentheses(std::vector<Token>::iterator* it, std::vector<Token>
     for(int i = 0; i < depth; i++){ std::cout << ".  "; }
     std::cout << "parentheses | [" << (*it)->type << "] - [" << end->type << "] |\n";
 #endif
-    if(depth > MAX_PARSE_DEPTH){ return StackTrace(ErrorType::MAX_DEPTH, ""); }
-    if((*it) == end){ return StackTrace(ErrorType::UNEXPECTED_EOF, ""); }
+    if(depth > MAX_PARSE_DEPTH){ return StackTrace(ErrorType::MAX_DEPTH, "", {}); }
+    if((*it) == end){ return StackTrace(ErrorType::UNEXPECTED_EOF, "", {}); }
     std::vector<Token>::iterator startPosition = (*it);
 
     if((*it)->type != TokenType::OPEN_PARENTH){
-        return StackTrace(ErrorType::INVALID_ARGUMENT, "No open parenth");
+        return StackTrace(ErrorType::INVALID_ARGUMENT, "No open parenth", {});
     }
     ++(*it);
     int parenthCount = 1;
@@ -204,7 +236,7 @@ StackTrace parseParentheses(std::vector<Token>::iterator* it, std::vector<Token>
         ++(*it);
     }
     if(*it == end){
-        return StackTrace(ErrorType::SYNTAX_ERROR, "Missing closing parenthesis");
+        return StackTrace(ErrorType::SYNTAX_ERROR, "Missing closing parenthesis", {}, true);
     }
     ++(*it);
 
@@ -216,9 +248,7 @@ StackTrace parseParentheses(std::vector<Token>::iterator* it, std::vector<Token>
     }
 
     (*it) = startPosition;
-    StackTrace trace(ErrorType::INVALID_ARGUMENT, "Bad inner parentheses statement");
-    trace.children.push_back(std::make_shared<StackTrace>(argSearch));
-    return trace;
+    return StackTrace(ErrorType::INVALID_ARGUMENT, "Bad inner parentheses statement", {std::ref(argSearch)}, argSearch.strongError);
 }
 
 StackTrace parseOperand(std::vector<Token>::iterator* it, std::vector<Token>::iterator end, int depth){
@@ -226,10 +256,13 @@ StackTrace parseOperand(std::vector<Token>::iterator* it, std::vector<Token>::it
     for(int i = 0; i < depth; i++){ std::cout << ".  "; }
     std::cout << "operand | [" << (*it)->type << "] - [" << end->type << "] |\n";
 #endif
-    if(depth > MAX_PARSE_DEPTH){ return StackTrace(ErrorType::MAX_DEPTH, ""); }
-    if((*it) == end){ return StackTrace(ErrorType::UNEXPECTED_EOF, ""); }
+    if(depth > MAX_PARSE_DEPTH){ return StackTrace(ErrorType::MAX_DEPTH, "", {}); }
+    if((*it) == end){ return StackTrace(ErrorType::UNEXPECTED_EOF, "", {}); }
     std::vector<Token>::iterator prevPosition = (*it);
     StackTrace valSearch = parseValue(it, end, depth+1);
+    if(valSearch.strongError){
+        return StackTrace(ErrorType::NONE, "", {std::ref(valSearch)}, true);
+    }
     if(valSearch.success){ //value
         std::shared_ptr<Node> ret = std::make_shared<Node>(NodeType::operand);
         ret->children.push_back(std::move(valSearch.node));
@@ -244,6 +277,9 @@ StackTrace parseOperand(std::vector<Token>::iterator* it, std::vector<Token>::it
     (*it) = prevPosition;
 
     StackTrace varSearch = parseVariable(it, end, depth+1);
+    if(varSearch.strongError){
+        return StackTrace(ErrorType::NONE, "", {std::ref(varSearch)}, true);
+    }
     if(varSearch.success){ //variable
         std::shared_ptr<Node> ret = std::make_shared<Node>(NodeType::operand);
         ret->children.push_back(std::move(varSearch.node));
@@ -258,6 +294,9 @@ StackTrace parseOperand(std::vector<Token>::iterator* it, std::vector<Token>::it
     (*it) = prevPosition;
 
     StackTrace stateSearch = parseStatement(it, end, depth+1);
+    if(stateSearch.strongError){
+        return StackTrace(ErrorType::NONE, "", {std::ref(stateSearch)}, true);
+    }
     if(stateSearch.success){ //statement
         std::shared_ptr<Node> ret = std::make_shared<Node>(NodeType::statement);
         ret->children.push_back(std::move(stateSearch.node));
@@ -270,11 +309,7 @@ StackTrace parseOperand(std::vector<Token>::iterator* it, std::vector<Token>::it
         return StackTrace(ret);
     }
     (*it) = prevPosition;
-    StackTrace trace(ErrorType::INVALID_ARGUMENT, "No valid operand found");
-    trace.children.push_back(std::make_shared<StackTrace>(valSearch));
-    trace.children.push_back(std::make_shared<StackTrace>(varSearch));
-    trace.children.push_back(std::make_shared<StackTrace>(stateSearch));
-    return trace;
+    return StackTrace(ErrorType::INVALID_ARGUMENT, "No valid operand found", {valSearch, varSearch, stateSearch});
 }
 
 StackTrace parseArgument(std::vector<Token>::iterator* it, std::vector<Token>::iterator end, int depth){
@@ -282,17 +317,20 @@ StackTrace parseArgument(std::vector<Token>::iterator* it, std::vector<Token>::i
     for(int i = 0; i < depth; i++){ std::cout << ".  "; }
     std::cout << "argument | [" << (*it)->type << "] - [" << end->type << "] |\n";
 #endif
-    if(depth > MAX_PARSE_DEPTH){ return StackTrace(ErrorType::MAX_DEPTH, ""); }
-    if((*it) == end){ return StackTrace(ErrorType::UNEXPECTED_EOF, ""); }
+    if(depth > MAX_PARSE_DEPTH){ return StackTrace(ErrorType::MAX_DEPTH, "", {}); }
+    if((*it) == end){ return StackTrace(ErrorType::UNEXPECTED_EOF, "", {}); }
 
     if(end - (*it) < 1){
-        return StackTrace(ErrorType::SYNTAX_ERROR, "Argument with size <0");
+        return StackTrace(ErrorType::SYNTAX_ERROR, "Argument with size <0", {}, true);
     }
 
     std::vector<Token>::iterator startPosition = (*it);
 
     //this has additional check to make sure that all tokens in parentheses are used
     StackTrace valSearch = parseValue(it, end, depth+1);
+    if(valSearch.strongError){
+        return StackTrace(ErrorType::NONE, "", {std::ref(valSearch)}, true);
+    }
     if(valSearch.success && (*it) == end){
 
 #ifdef PARSE_TREE_DEBUG_PRINT
@@ -305,6 +343,9 @@ StackTrace parseArgument(std::vector<Token>::iterator* it, std::vector<Token>::i
     (*it) = startPosition;
 
     StackTrace varSearch = parseVariable(it, end, depth+1);
+    if(varSearch.strongError){
+        return StackTrace(ErrorType::NONE, "", {std::ref(varSearch)}, true);
+    }
     if(varSearch.success && (*it) == end){
 
 #ifdef PARSE_TREE_DEBUG_PRINT
@@ -317,6 +358,9 @@ StackTrace parseArgument(std::vector<Token>::iterator* it, std::vector<Token>::i
     (*it) = startPosition;
     
     StackTrace opSearch = parseOperand(it, end, depth+1);
+    if(opSearch.strongError){
+        return StackTrace(ErrorType::NONE, "", {std::ref(opSearch)}, true);
+    }
     if(opSearch.success && (*it) == end){
 
 #ifdef PARSE_TREE_DEBUG_PRINT
@@ -329,6 +373,9 @@ StackTrace parseArgument(std::vector<Token>::iterator* it, std::vector<Token>::i
     (*it) = startPosition;
 
     StackTrace stateSearch = parseStatement(it, end, depth+1);
+    if(stateSearch.strongError){
+        return StackTrace(ErrorType::NONE, "", {std::ref(stateSearch)}, true);
+    }
     if(stateSearch.success && *it == end){
 
 #ifdef PARSE_TREE_DEBUG_PRINT
@@ -339,12 +386,8 @@ StackTrace parseArgument(std::vector<Token>::iterator* it, std::vector<Token>::i
         return stateSearch;
     }
     (*it) = startPosition;
-    StackTrace trace(ErrorType::INVALID_ARGUMENT, "No valid operand found");
-    trace.children.push_back(std::make_shared<StackTrace>(valSearch));
-    trace.children.push_back(std::make_shared<StackTrace>(varSearch));
-    trace.children.push_back(std::make_shared<StackTrace>(opSearch));
-    trace.children.push_back(std::make_shared<StackTrace>(stateSearch));
-    return trace;
+    return StackTrace(ErrorType::INVALID_ARGUMENT, "No valid operand found",
+        {valSearch, varSearch, opSearch, stateSearch});
 }
 
 StackTrace parseVariable(std::vector<Token>::iterator* it, std::vector<Token>::iterator end, int depth){
@@ -352,8 +395,8 @@ StackTrace parseVariable(std::vector<Token>::iterator* it, std::vector<Token>::i
     for(int i = 0; i < depth; i++){ std::cout << ".  "; }
     std::cout << "variable | [" << (*it)->type << "] - [" << end->type << "] |\n";
 #endif
-    if(depth > MAX_PARSE_DEPTH){ return StackTrace(ErrorType::MAX_DEPTH, ""); }
-    if((*it) == end){ return StackTrace(ErrorType::UNEXPECTED_EOF, ""); }
+    if(depth > MAX_PARSE_DEPTH){ return StackTrace(ErrorType::MAX_DEPTH, "", {}); }
+    if((*it) == end){ return StackTrace(ErrorType::UNEXPECTED_EOF, "", {}); }
     
     std::vector<Token>::iterator prevPosition = (*it);
     if((*it)->type == TokenType::IDENTIFIER){ //x
@@ -380,12 +423,15 @@ StackTrace parseVariable(std::vector<Token>::iterator* it, std::vector<Token>::i
                 }
             }
             if(!bracketFound){ //malformed brackets
-                return StackTrace(ErrorType::SYNTAX_ERROR, "Missing Closing Bracket");
+                return StackTrace(ErrorType::SYNTAX_ERROR, "Missing Closing Bracket", {}, true);
             }
 
             std::vector<Token>::iterator subIt = identifierEndPosition + 1;
             std::vector<Token>::iterator subEnd = *it;
             StackTrace argSearch = parseArgument(&subIt, subEnd, depth+1);
+            if(argSearch.strongError){
+                return StackTrace(ErrorType::NONE, "", {std::ref(argSearch)}, true);
+            }
             if(argSearch.success){
 #ifdef PARSE_TREE_DEBUG_PRINT
                 for(int i = 0; i < depth; i++){ std::cout << ".  "; }
@@ -395,9 +441,7 @@ StackTrace parseVariable(std::vector<Token>::iterator* it, std::vector<Token>::i
                 ++(*it);
                 identifierEndPosition = (*it);
             } else {
-                StackTrace trace(ErrorType::INVALID_ARGUMENT, "Malformed array index"); //malformed argument
-                trace.children.push_back(std::make_shared<StackTrace>(argSearch));
-                return trace;
+                return StackTrace(ErrorType::INVALID_ARGUMENT, "Malformed array index", {std::ref(argSearch)}, true); //malformed argument
             }
         }
 
@@ -412,7 +456,7 @@ StackTrace parseVariable(std::vector<Token>::iterator* it, std::vector<Token>::i
         return StackTrace(ret);
     }
     (*it) = prevPosition;
-    return StackTrace(ErrorType::EXPECTED_STATEMENT, "Expected Identifier");
+    return StackTrace(ErrorType::EXPECTED_STATEMENT, "Expected Identifier", {});
 }
 
 StackTrace parseValue(std::vector<Token>::iterator* it, std::vector<Token>::iterator end, int depth){
@@ -420,8 +464,8 @@ StackTrace parseValue(std::vector<Token>::iterator* it, std::vector<Token>::iter
     for(int i = 0; i < depth; i++){ std::cout << ".  "; }
     std::cout << "value | [" << (*it)->type << "] - [" << end->type << "] |\n";
 #endif
-    if(depth > MAX_PARSE_DEPTH){ return StackTrace(ErrorType::MAX_DEPTH, ""); }
-    if((*it) == end){ return StackTrace(ErrorType::UNEXPECTED_EOF, ""); }
+    if(depth > MAX_PARSE_DEPTH){ return StackTrace(ErrorType::MAX_DEPTH, "", {}); }
+    if((*it) == end){ return StackTrace(ErrorType::UNEXPECTED_EOF, "", {}); }
 
     if((*it)->type == TokenType::INT_LITERAL){
         std::shared_ptr<Node> ret = std::make_shared<Node>(NodeType::value, std::make_shared<Token>(**it));
@@ -434,7 +478,7 @@ StackTrace parseValue(std::vector<Token>::iterator* it, std::vector<Token>::iter
 
         return ret;
     }
-    return StackTrace(ErrorType::EXPECTED_STATEMENT, "Expected INT_LITERAL");
+    return StackTrace(ErrorType::EXPECTED_STATEMENT, "Expected INT_LITERAL", {});
 }
 
 parseTreeReturn createParseTree(std::vector<Token>& tokens){

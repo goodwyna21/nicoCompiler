@@ -81,32 +81,33 @@ int main(int argc, const char * argv[]) {
 
     std::cout << "tokens:\n-----------------------------\n";
     printTokens(tokens);
-    std::cout << "\n-----------------------------\n";
+    std::cout << "\n-----------------------------\n\n";
 
 
     std::vector<std::shared_ptr<Node>> trees;
     {
         parseTreeReturn parseTree = createParseTree(tokens); 
         if(parseTree.success == false){
-            std::cout << "Errors in creating parse tree\n";
-            return EXIT_FAILURE;
-        } else {
-            for(int i = 0; i < parseTree.traces.size(); i++){
-                parseTree.traces.at(i).node->print(0);
-                std::cout << "\n";
+            std::cout << "Errors in creating parse tree:\n-----------------------------\n";
+            for(auto it = parseTree.traces.begin(); it != parseTree.traces.end(); ++it){
+                if(!it->success){
+                    it->printTrace();
+                }
             }
-        }
+            std::cout << "-----------------------------\n";
+        } 
         for(int i = 0; i < parseTree.traces.size(); i++){
             trees.push_back(std::move(parseTree.traces.at(i).node));
         }
     }
 
-    std::cout << "parse tree:\n-----------------------------\n";
+    std::cout << "\nparse tree:\n-----------------------------\n\n";
     for(int i = 0; i < trees.size(); i++){
+        if(trees.at(i) == nullptr){ std::cout << "Error\n\n"; continue; }
         trees.at(i)->print(0);
         std::cout << "\n";
     }
-    std::cout << "\n-----------------------------\n";
+    std::cout << "-----------------------------\n";
 
     /*
     std::cout << "assembly:\n-----------------------------\n";
